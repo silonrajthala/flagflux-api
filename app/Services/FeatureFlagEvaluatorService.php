@@ -3,62 +3,67 @@
 namespace App\Services;
 
 use App\Models\FeatureFlag;
+use App\Models\Project;
 use Illuminate\Support\Facades\Cache;
 
 class FeatureFlagEvaluatorService
 {
     public function evaluate(string $projectSlug, string $flagKey, array $context = []): bool
     {
-        $cacheKey = "flags:project:{$projectSlug}";
+        // Cache key for sub-millisecond evaluation performance
+        $cacheKey = "flag_eval_{$projectSlug}_{$flagKey}_" . md5(json_encode($context));
 
-        // Cache all flags for this project for 60 seconds to ensure high performance
-        $flags = Cache::remember($cacheKey, 60, function () use ($projectSlug) {
-            return FeatureFlag::with('rules')
-                ->whereHas('project', fn($q) => $q->where('slug', $projectSlug))
-                ->get()
-                ->keyBy('key');
-        });
+        return Cache::remember($cacheKey, 60, function () use ($projectSlug, $flagKey, $context) {
+            $project = Project::where('slug', $projectSlug)->first();
 
-        // If the flag doesn't exist, default to false (disabled)
-        if (!isset($flags[$flagKey])) {
-            return false;
-        }
-
-        $flag = $flags[$flagKey];
-
-        // If the master switch is off, it's disabled for everyone
-        if (!$flag->is_enabled) {
-            return false;
-        }
-
-        // If there are no custom rules, respect the global master switch
-        if ($flag->rules->isEmpty()) {
-            return true;
-        }
-
-        // Evaluate targeting rules against the provided user context
-        foreach ($flag->rules as $rule) {
-            $userValue = $context[$rule->attribute] ?? null;
-
-            if ($this->matchesRule($rule, $userValue)) {
-                return true; // Matches target rule, grant access
+            if (!$project) {
+                return false;
             }
-        }
 
-        // If rules exist but none matched, default to false
-        return false;
-    }
+            $flag = FeatureFlag::where('project_id', $project->id)
+                ->where('key', $flagKey)
+                ->with('rules')
+                ->first();
 
-    protected function matchesRule($rule, $userValue): bool
-    {
-        if ($userValue === null) {
-            return false;
-        }
+            // 1. If flag doesn't exist or global master switch is off, return false
+            if (!$flag || !$flag->is_enabled) {
+                return false;
+            }
 
-        return match ($rule->operator) {
-            'equals' => $userValue === ($rule->values[0] ?? null),
-            'in' => in_array($userValue, $rule->values),
-            default => false,
-        };
+            // 2. Evaluate Targeting Rules (if any exist)
+            foreach ($flag->rules as $rule) {
+                $contextValue = $context[$rule->attribute] ?? null;
+
+                if ($contextValue === null) {
+                    return false; // Attribute missing in context, fail rule
+                }
+
+                if ($rule->operator === 'equals' && $contextValue !== $rule->values[0]) {
+                    return false;
+                }
+
+                if ($rule->operator === 'in' && !in_array($contextValue, $rule->values)) {
+                    return false;
+                }
+            }
+
+            // 3. Evaluate Percentage Rollout (Hash Bucketing)
+            if ($flag->rollout_percentage < 100) {
+                $userId = $context['user_id'] ?? $context['id'] ?? null;
+
+                if (!$userId) {
+                    return false; // Cannot bucket without a unique user identifier
+                }
+
+                // Generate a deterministic bucket between 0 and 99 using crc32
+                $bucket = abs(crc32($userId . $flag->key)) % 100;
+
+                if ($bucket >= $flag->rollout_percentage) {
+                    return false; // User falls outside the rollout percentage
+                }
+            }
+
+            return true;
+        });
     }
 }
