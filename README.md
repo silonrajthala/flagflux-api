@@ -1,13 +1,13 @@
 # 🚀 FlagFlux API
 
-A high-performance, production-ready **Feature Flag & A/B Testing Engine** built with Laravel 12, MySQL, and Redis. Designed to showcase clean architecture, service-oriented design, dynamic rule evaluation, and robust automated testing.
+A high-performance, production-ready **Feature Flag & A/B Testing Engine** built with Laravel 12, PostgreSQL, and Redis. Designed to showcase clean architecture, service-oriented design, dynamic rule evaluation, and robust automated testing.
 
 ---
 
 ## 🛠️ Tech Stack
 
 * **Framework:** Laravel 12 (PHP)
-* **Database:** MySQL / SQLite (for testing)
+* **Database:** PostgreSQL (with SQLite for automated testing)
 * **Caching Layer:** Redis (`Cache::remember` for sub-millisecond evaluations)
 * **Testing:** PHPUnit (Feature & Integration testing)
 
@@ -22,7 +22,7 @@ FlagFlux follows a **Service-Oriented Architecture (SOA)**, separating HTTP rout
   * `Projects` (Multi-tenant container)
   * `Environments` (Production, Staging, etc.)
   * `FeatureFlags` (Master toggle state)
-  * `FlagRules` (JSON-driven dynamic targeting attributes using operators like `equals` and `in`)
+  * `FlagRules` (Dynamic targeting attributes using operators like `equals` and `in`)
 
 ---
 
@@ -32,7 +32,7 @@ Follow these steps to set up the project locally on your machine:
 
 ### 1. Clone the Repository
 ```bash
-git clone [https://github.com/silonrajthala/flagflux-api.git](https://github.com/silonrajthala/flagflux-api.git)
+git clone [https://github.com/your-username/flagflux-api.git](https://github.com/your-username/flagflux-api.git)
 cd flagflux-api
 ```
 
@@ -46,7 +46,7 @@ composer install
 cp .env.example .env
 php artisan key:generate
 ```
-*(Make sure your database credentials are correctly set in your `.env` file).*
+*(Make sure your PostgreSQL database credentials and connection are properly configured in your `.env` file).*
 
 ### 4. Run Migrations & Seeders
 ```bash
